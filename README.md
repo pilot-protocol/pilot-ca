@@ -1,5 +1,9 @@
 # pilot-ca
 
+[![ci](https://github.com/pilot-protocol/pilot-ca/actions/workflows/ci.yml/badge.svg)](https://github.com/pilot-protocol/pilot-ca/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/pilot-protocol/pilot-ca/branch/main/graph/badge.svg)](https://codecov.io/gh/pilot-protocol/pilot-ca)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
 Offline root-CA tooling for the Pilot Protocol. Generates and manages the Ed25519 root certificate that signs beacon WSS leaf certs in compat mode (TLS over port 443).
 
 The root **private key is the trust anchor for every compat-mode daemon**. It must never leave the operator's secure machine (Yubikey-backed or air-gapped). This binary is the only production code that touches it.
@@ -28,3 +32,7 @@ pilot-ca issue-beacon <root-dir> <hostname> <out-dir>
 See `docs/RUNBOOK-pilot-ca.md` in the `pilot-protocol/docs` repo for the full procedure: airgap setup, root rotation cadence, key-ceremony witnesses.
 
 The CA tooling has a deliberately small surface and rare invocation cadence — every commit here is material to the trust anchor and should be reviewable in isolation.
+
+## License
+
+AGPL-3.0-or-later. See [LICENSE](LICENSE).
