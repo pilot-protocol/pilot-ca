@@ -1,13 +1,8 @@
 # pilot-ca
 
-Offline root-CA tooling for the Pilot Protocol. Generates and manages
-the Ed25519 root certificate that signs beacon WSS leaf certs in
-compat mode (TLS over port 443).
+Offline root-CA tooling for the Pilot Protocol. Generates and manages the Ed25519 root certificate that signs beacon WSS leaf certs in compat mode (TLS over port 443).
 
-The root **private key is the trust anchor for every compat-mode
-daemon**. It must never leave the operator's secure machine
-(Yubikey-backed or air-gapped). This binary is the only production
-code that touches it.
+The root **private key is the trust anchor for every compat-mode daemon**. It must never leave the operator's secure machine (Yubikey-backed or air-gapped). This binary is the only production code that touches it.
 
 ## Install
 
@@ -30,13 +25,6 @@ pilot-ca issue-beacon <root-dir> <hostname> <out-dir>
 
 ## Operational notes
 
-See `docs/RUNBOOK-pilot-ca.md` in `pilot-protocol/docs` for the full
-procedure: airgap setup, root rotation cadence, key-ceremony witnesses.
+See `docs/RUNBOOK-pilot-ca.md` in the `pilot-protocol/docs` repo for the full procedure: airgap setup, root rotation cadence, key-ceremony witnesses.
 
-## Why a separate repo
-
-The CA tooling has a lifecycle that's completely different from the
-daemon (rare invocation, audit-critical, must be reviewable in
-isolation). Keeping it in its own repo means CA-touching commits
-don't get lost in daemon-feature noise — every commit here is
-material to the trust anchor.
+The CA tooling has a deliberately small surface and rare invocation cadence — every commit here is material to the trust anchor and should be reviewable in isolation.
