@@ -287,7 +287,7 @@ func mustMarshalPKCS8(key any) []byte {
 }
 
 func writePEM(path, blockType string, der []byte, mode os.FileMode) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
