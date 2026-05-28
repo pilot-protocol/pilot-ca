@@ -198,7 +198,7 @@ func TestVerifyChain_AcceptsValid(t *testing.T) {
 	if err := issueBeacon(rootDir, host, leafDir); err != nil {
 		t.Fatalf("issueBeacon: %v", err)
 	}
-	if err := verifyChain(filepath.Join(rootDir, "root.crt"), filepath.Join(leafDir, host+".crt")); err != nil {
+	if err := verifyChain(filepath.Join(rootDir, "root.crt"), filepath.Join(leafDir, host+".crt"), host); err != nil {
 		t.Errorf("verifyChain rejected valid chain: %v", err)
 	}
 }
@@ -223,7 +223,7 @@ func TestVerifyChain_RejectsUnrelatedRoot(t *testing.T) {
 		t.Fatalf("issueBeacon: %v", err)
 	}
 	// Leaf was signed by rootA, but we verify against rootB.
-	err := verifyChain(filepath.Join(rootB, "root.crt"), filepath.Join(leafDir, host+".crt"))
+	err := verifyChain(filepath.Join(rootB, "root.crt"), filepath.Join(leafDir, host+".crt"), host)
 	if err == nil {
 		t.Fatal("verifyChain accepted leaf signed by a different root; expected rejection")
 	}
@@ -237,7 +237,7 @@ func TestVerifyChain_RejectsBadPEM(t *testing.T) {
 	if err := os.WriteFile(junk, []byte("not a pem"), 0o644); err != nil {
 		t.Fatalf("seed junk: %v", err)
 	}
-	err := verifyChain(junk, junk)
+	err := verifyChain(junk, junk, "")
 	if err == nil {
 		t.Fatal("verifyChain accepted garbage PEM; expected rejection")
 	}

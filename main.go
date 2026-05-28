@@ -22,8 +22,9 @@
 //	   Validity: 90 days. Re-run before expiry; Caddy reloads
 //	   automatically on file change.
 //
-//	pilot-ca verify <root.crt> <leaf.crt>
-//	   Confirm a leaf cert chains to the root and is currently valid.
+//	pilot-ca verify <root.crt> <leaf.crt> [hostname]
+//	   Confirm a leaf cert chains to the root, is currently valid,
+//	   and (when hostname is given) that the leaf SAN matches hostname.
 //	   Exit 0 on success.
 //
 // The root cert (PEM) is what gets embedded in pilot-daemon via
@@ -87,7 +88,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: pilot-ca <subcommand> [args...]")
 		fmt.Fprintln(os.Stderr, "  init-root    <out-dir>")
 		fmt.Fprintln(os.Stderr, "  issue-beacon <root-dir> <hostname> <out-dir>")
-		fmt.Fprintln(os.Stderr, "  verify       <root.crt> <leaf.crt>")
+		fmt.Fprintln(os.Stderr, "  verify       <root.crt> <leaf.crt> [hostname]")
 	}
 	flag.Parse()
 	args := flag.Args()
@@ -113,11 +114,16 @@ func main() {
 			die("issue-beacon: %v", err)
 		}
 	case "verify":
-		if len(args) != 3 {
+		hostname := ""
+		if len(args) == 3 {
+			// verify <root.crt> <leaf.crt> — chain-only (backward compat)
+		} else if len(args) == 4 {
+			hostname = args[3]
+		} else {
 			flag.Usage()
 			os.Exit(2)
 		}
-		if err := verifyChain(args[1], args[2]); err != nil {
+		if err := verifyChain(args[1], args[2], hostname); err != nil {
 			die("verify: %v", err)
 		}
 	default:
@@ -241,10 +247,11 @@ func issueBeacon(rootDir, hostname, outDir string) error {
 }
 
 // verifyChain confirms a leaf cert chains to a root cert and is valid
-// for the current wall clock. Used in CI before bundling a leaf into
-// a beacon deployment, and as a sanity check in install/upgrade
-// scripts.
-func verifyChain(rootCrtPath, leafCrtPath string) error {
+// for the current wall clock. When hostname is non-empty, the leaf's
+// SAN is also checked against hostname via x509.VerifyOptions.DNSName.
+// Used in CI before bundling a leaf into a beacon deployment, and as a
+// sanity check in install/upgrade scripts.
+func verifyChain(rootCrtPath, leafCrtPath, hostname string) error {
 	rootPEM, err := os.ReadFile(rootCrtPath)
 	if err != nil {
 		return fmt.Errorf("read root cert: %w", err)
@@ -265,14 +272,22 @@ func verifyChain(rootCrtPath, leafCrtPath string) error {
 	if err != nil {
 		return fmt.Errorf("leaf parse: %w", err)
 	}
-	if _, err := leaf.Verify(x509.VerifyOptions{
+	opts := x509.VerifyOptions{
 		Roots:     pool,
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}); err != nil {
+	}
+	if hostname != "" {
+		opts.DNSName = hostname
+	}
+	if _, err := leaf.Verify(opts); err != nil {
 		return fmt.Errorf("verify failed: %w", err)
 	}
 	fmt.Printf("OK — %s chains to %s\n", leafCrtPath, rootCrtPath)
-	fmt.Printf("  CN=%s  not-after=%s\n", leaf.Subject.CommonName, leaf.NotAfter.Format(time.RFC3339))
+	if hostname != "" {
+		fmt.Printf("  hostname=%s  CN=%s  not-after=%s\n", hostname, leaf.Subject.CommonName, leaf.NotAfter.Format(time.RFC3339))
+	} else {
+		fmt.Printf("  CN=%s  not-after=%s\n", leaf.Subject.CommonName, leaf.NotAfter.Format(time.RFC3339))
+	}
 	return nil
 }
 

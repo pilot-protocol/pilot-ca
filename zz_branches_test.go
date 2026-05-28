@@ -76,7 +76,7 @@ func TestVerifyChain_MissingLeafFile(t *testing.T) {
 	if err := initRoot(rootDir); err != nil {
 		t.Fatalf("initRoot: %v", err)
 	}
-	err := verifyChain(filepath.Join(rootDir, "root.crt"), "/nonexistent/leaf.crt")
+	err := verifyChain(filepath.Join(rootDir, "root.crt"), "/nonexistent/leaf.crt", "")
 	if err == nil || !strings.Contains(err.Error(), "read leaf cert") {
 		t.Errorf("err = %v; want 'read leaf cert'", err)
 	}
@@ -95,7 +95,7 @@ func TestVerifyChain_RootPEMAppendFails(t *testing.T) {
 	if err := os.WriteFile(leafPath, []byte("garbage"), 0o644); err != nil {
 		t.Fatalf("write leaf: %v", err)
 	}
-	err := verifyChain(rootPath, leafPath)
+	err := verifyChain(rootPath, leafPath, "")
 	if err == nil || !strings.Contains(err.Error(), "root cert PEM parse failed") {
 		t.Errorf("err = %v; want 'root cert PEM parse failed'", err)
 	}
@@ -114,7 +114,7 @@ func TestVerifyChain_LeafParseError(t *testing.T) {
 	if err := os.WriteFile(leafPath, []byte(garbageLeaf), 0o644); err != nil {
 		t.Fatalf("write leaf: %v", err)
 	}
-	err := verifyChain(filepath.Join(rootDir, "root.crt"), leafPath)
+	err := verifyChain(filepath.Join(rootDir, "root.crt"), leafPath, "")
 	if err == nil || !strings.Contains(err.Error(), "leaf parse") {
 		t.Errorf("err = %v; want 'leaf parse'", err)
 	}
