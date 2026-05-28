@@ -44,6 +44,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -52,6 +53,34 @@ const (
 	leafValidDays  = 90 // leaf rotates often
 	caCommonName   = "Pilot Protocol Root CA"
 )
+
+// hostnameRE is a strict DNS-name regex applied to issue-beacon's
+// hostname argument. We restrict to lowercase letters, digits, and
+// hyphens (with dot separators) — the same shape Caddy and most TLS
+// stacks accept as a SAN DNSName. The strict allowlist guarantees no
+// path separator (`/`, `\`), no parent-dir token (`..`), and no
+// shell-metacharacter ever reaches filepath.Join when we build
+// <outDir>/<hostname>.{key,crt}.
+//
+// Length is capped at 253 (the DNS hostname maximum) and each label
+// at 63 (the DNS label maximum).
+var hostnameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$`)
+
+// validateHostname enforces hostnameRE and the 253-char total length
+// cap. Returns a clear error for the issue-beacon caller — never
+// silently accepts a name that could escape outDir via filepath.Join.
+func validateHostname(hostname string) error {
+	if hostname == "" {
+		return fmt.Errorf("hostname required")
+	}
+	if len(hostname) > 253 {
+		return fmt.Errorf("hostname %q exceeds 253-char DNS limit", hostname)
+	}
+	if !hostnameRE.MatchString(hostname) {
+		return fmt.Errorf("hostname %q is not a valid DNS name (allowed: lowercase letters, digits, hyphen, dot; no path separators, no '..')", hostname)
+	}
+	return nil
+}
 
 func main() {
 	flag.Usage = func() {
@@ -156,8 +185,8 @@ func initRoot(outDir string) error {
 // P-256 ECDSA keypair + leaf cert chained to the root. Leaf cert
 // validity is 90 days; re-issue before expiry.
 func issueBeacon(rootDir, hostname, outDir string) error {
-	if hostname == "" {
-		return fmt.Errorf("hostname required")
+	if err := validateHostname(hostname); err != nil {
+		return err
 	}
 	rootCert, rootKey, err := loadRoot(rootDir)
 	if err != nil {
