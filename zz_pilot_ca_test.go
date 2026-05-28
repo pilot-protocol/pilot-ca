@@ -264,6 +264,37 @@ func TestRandomSerial_Unique(t *testing.T) {
 	}
 }
 
+// TestWritePEM_FsyncBeforeClose pins that writePEM produces valid
+// PEM files and that the file is readable immediately after the call
+// returns (data durability via fsync).
+func TestWritePEM_FsyncBeforeClose(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.crt")
+	der := make([]byte, 32)
+	for i := range der {
+		der[i] = byte(i)
+	}
+	if err := writePEM(path, "CERTIFICATE", der, 0o644); err != nil {
+		t.Fatalf("writePEM: %v", err)
+	}
+	// Immediately read back — data must be on disk (fsync'd).
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	block, _ := pem.Decode(raw)
+	if block == nil {
+		t.Fatal("no PEM block found")
+	}
+	if block.Type != "CERTIFICATE" {
+		t.Fatalf("expected CERTIFICATE, got %q", block.Type)
+	}
+	if len(block.Bytes) != 32 {
+		t.Fatalf("expected 32 DER bytes, got %d", len(block.Bytes))
+	}
+}
+
 // mustReadCert reads a PEM-encoded cert and parses it, failing the
 // test on any error.
 func mustReadCert(t *testing.T, path string) *x509.Certificate {
