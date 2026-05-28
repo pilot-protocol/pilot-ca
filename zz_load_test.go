@@ -3,12 +3,19 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestLoadRoot_MissingCert covers the os.ReadFile error branch.
@@ -142,6 +149,59 @@ func TestIssueBeacon_HappyPath(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(beaconDir, name)); err != nil {
 			t.Errorf("%s missing: %v", name, err)
 		}
+	}
+}
+
+// TestLoadRoot_NotCA verifies loadRoot rejects a self-signed cert
+// that does not have IsCA set. This is the PILOT-139 fix.
+func TestLoadRoot_NotCA(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Generate a leaf-like self-signed cert (IsCA=false).
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		t.Fatalf("serial: %v", err)
+	}
+	now := time.Now().UTC()
+	tmpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "test"},
+		NotBefore:    now,
+		NotAfter:     now.Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		IsCA:         false,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("CreateCertificate: %v", err)
+	}
+	crtPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	// Also marshal the key — loadRoot needs both files.
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("MarshalPKCS8: %v", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+
+	if err := os.WriteFile(filepath.Join(dir, "root.crt"), crtPEM, 0644); err != nil {
+		t.Fatalf("write crt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "root.key"), keyPEM, 0600); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+
+	_, _, err = loadRoot(dir)
+	if err == nil {
+		t.Error("loadRoot should reject a non-CA root cert")
+	}
+	if err != nil && !strings.Contains(err.Error(), "IsCA") {
+		t.Errorf("err = %v, want IsCA", err)
 	}
 }
 

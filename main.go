@@ -296,6 +296,12 @@ func loadRoot(rootDir string) (*x509.Certificate, any, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("root.crt parse: %w", err)
 	}
+	if !crt.IsCA {
+		return nil, nil, fmt.Errorf("root.crt: certificate is not a CA (IsCA=false)")
+	}
+	if !crt.BasicConstraintsValid {
+		return nil, nil, fmt.Errorf("root.crt: basic constraints missing or invalid")
+	}
 	keyBlock, _ := pem.Decode(keyPEM)
 	if keyBlock == nil {
 		return nil, nil, fmt.Errorf("root.key: invalid PEM")
