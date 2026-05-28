@@ -324,6 +324,15 @@ func writePEM(path, blockType string, der []byte, mode os.FileMode) error {
 	if err := pem.Encode(f, &pem.Block{Type: blockType, Bytes: der}); err != nil {
 		return fmt.Errorf("encode %s: %w", path, err)
 	}
+	// fsync the data file so a crash after writePEM returns doesn't lose the cert.
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("sync %s: %w", path, err)
+	}
+	// fsync the parent directory so the directory entry is committed.
+	if dir, err := os.Open(filepath.Dir(path)); err == nil {
+		dir.Sync() // best-effort; Close will report any delayed error
+		dir.Close()
+	}
 	return nil
 }
 
