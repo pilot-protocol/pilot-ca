@@ -120,26 +120,81 @@ func TestVerifyChain_LeafParseError(t *testing.T) {
 	}
 }
 
-// TestIssueBeacon_HostnameWithSlash documents current behavior: the tool
-// builds <outDir>/<hostname>.{key,crt} via filepath.Join, so a hostname
-// containing a path separator silently writes files in a sibling
-// directory rather than failing. Pinning this so a future fix flips
-// the assertion intentionally.
-//
-// NOTE: as of this writing, issueBeacon does NOT validate hostname
-// characters beyond emptiness. If/when that lands, update this test
-// to expect an error.
-func TestIssueBeacon_HostnameWithSlash_CurrentBehavior(t *testing.T) {
+// TestIssueBeacon_HostnameWithSlash_Rejected pins the path-traversal
+// fix: hostnames containing '/' (and the parent-dir token '..') must
+// be rejected before any filepath.Join touches outDir, so a leaf cert
+// can never be written outside the operator-chosen directory.
+func TestIssueBeacon_HostnameWithSlash_Rejected(t *testing.T) {
 	t.Parallel()
 	rootDir := t.TempDir()
 	if err := initRoot(rootDir); err != nil {
 		t.Fatalf("initRoot: %v", err)
 	}
 	outDir := t.TempDir()
-	// Hostname with a slash — issueBeacon may or may not reject this.
-	// We don't assert success or failure; we assert it doesn't panic
-	// and produces a deterministic outcome.
 	err := issueBeacon(rootDir, "evil/../host", outDir)
-	// Document current behavior in test output for the maintainer.
-	t.Logf("issueBeacon('evil/../host') -> err=%v", err)
+	if err == nil {
+		t.Fatal("expected error for hostname with slash; got nil")
+	}
+	if !strings.Contains(err.Error(), "hostname") {
+		t.Errorf("error = %q; want it to mention 'hostname'", err.Error())
+	}
+	// And no leaf files should have been created anywhere.
+	entries, readErr := os.ReadDir(outDir)
+	if readErr != nil {
+		t.Fatalf("read outDir: %v", readErr)
+	}
+	if len(entries) != 0 {
+		t.Errorf("outDir not empty after rejected hostname: %v", entries)
+	}
+}
+
+// TestIssueBeacon_HostnameWithParentDir_Rejected explicitly covers a
+// bare '..' traversal attempt — even with no slash present, '..' must
+// be rejected because filepath.Join would resolve it relative to outDir.
+func TestIssueBeacon_HostnameWithParentDir_Rejected(t *testing.T) {
+	t.Parallel()
+	rootDir := t.TempDir()
+	if err := initRoot(rootDir); err != nil {
+		t.Fatalf("initRoot: %v", err)
+	}
+	outDir := t.TempDir()
+	for _, host := range []string{"..", "../escape", "foo/../bar", `evil\..\host`} {
+		err := issueBeacon(rootDir, host, outDir)
+		if err == nil {
+			t.Errorf("hostname %q: expected error; got nil", host)
+			continue
+		}
+		if !strings.Contains(err.Error(), "hostname") {
+			t.Errorf("hostname %q: error = %q; want it to mention 'hostname'", host, err.Error())
+		}
+	}
+	entries, readErr := os.ReadDir(outDir)
+	if readErr != nil {
+		t.Fatalf("read outDir: %v", readErr)
+	}
+	if len(entries) != 0 {
+		t.Errorf("outDir not empty after rejected hostnames: %v", entries)
+	}
+}
+
+// TestIssueBeacon_ValidHostname_Succeeds proves the happy path still
+// works after the strict-allowlist validator landed — a normal DNS name
+// produces both files in outDir.
+func TestIssueBeacon_ValidHostname_Succeeds(t *testing.T) {
+	t.Parallel()
+	rootDir := t.TempDir()
+	if err := initRoot(rootDir); err != nil {
+		t.Fatalf("initRoot: %v", err)
+	}
+	outDir := t.TempDir()
+	const host = "beacon-01.example.com"
+	if err := issueBeacon(rootDir, host, outDir); err != nil {
+		t.Fatalf("issueBeacon(%q): %v", host, err)
+	}
+	for _, name := range []string{host + ".key", host + ".crt"} {
+		p := filepath.Join(outDir, name)
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected %s to exist: %v", p, err)
+		}
+	}
 }
