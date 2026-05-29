@@ -165,8 +165,8 @@ func initRoot(outDir string) error {
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		MaxPathLen:            1,
-		MaxPathLenZero:        false,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, pub, priv)
 	if err != nil {
